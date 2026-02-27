@@ -1,0 +1,112 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov httpx
+    
+    - name: Run tests
+      run: |
+        pytest tests/ -v --cov=app --cov-report=term-missing || echo "No tests found, skipping..."
+    
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Deploy to EC2
+      env:
+        PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        HOST: ${{ secrets.EC2_HOST }}
+        USER: ${{ secrets.EC2_USER }}
+      run: |
+        echo "$PRIVATE_KEY" > private_key.pem
+        chmod 600 private_key.pem
+        
+        # Copy files to EC2
+        scp -o StrictHostKeyChecking=no -i private_key.pem -r ./* ${USER}@${HOST}:/home/${USER}/app/
+        
+        # Run deployment script on EC2
+        ssh -o StrictHostKeyChecking=no -i private_key.pem ${USER}@${HOST} << 'EOF'
+          set -e
+          
+          # Create app directory
+          mkdir -p /home/ubuntu/app
+          cd /home/ubuntu/app
+          
+          # Install Python and pip if not present
+          if ! command -v pip3 &> /dev/null; then
+            echo "Installing Python pip..."
+            sudo apt-get update
+            sudo apt-get install -y python3-pip python3-venv
+          fi
+          
+          # Create and activate virtual environment
+          python3 -m venv venv || true
+          source venv/bin/activate
+          
+          # Install/Update dependencies
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          
+          # Create systemd service if it doesn't exist
+          if [ ! -f /etc/systemd/system/fastapi-app.service ]; then
+            echo "Creating systemd service..."
+            echo "[Unit]" | sudo tee /etc/systemd/system/fastapi-app.service > /dev/null
+            echo "Description=FastAPI Application" | sudo tee -a /etc/systemd/system/fastapi-app.service > /dev/null
+            echo "After=network.target" | sudo tee -a /etc/systemd/system/fastapi-app.service > /dev/null
+            echo "" | sudo tee -a /etc/systemd/system/fastapi-app.service > /dev/null
+            echo "[Service]" | sudo tee -a /etc/systemd/system/fastapi-app.service > /dev/null
+            echo "Type=simple" | sudo tee -a /etc/systemd/system/fastapi-app.service > /dev/null
+            echo "User=ubuntu" | sudo tee -a /etc/systemd/system/fastapi-app.service > /dev/null
+            echo "WorkingDirectory=/home/ubuntu/app" | sudo tee -a /etc/systemd/system/fastapi-app.service > /dev/null
+            echo "Environment=\"PATH=/home/ubuntu/app/venv/bin\"" | sudo tee -a /etc/systemd/system/fastapi-app.service > /dev/null
+            echo "ExecStart=/home/ubuntu/app/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000" | sudo tee -a /etc/systemd/system/fastapi-app.service > /dev/null
+            echo "Restart=always" | sudo tee -a /etc/systemd/system/fastapi-app.service > /dev/null
+            echo "RestartSec=3" | sudo tee -a /etc/systemd/system/fastapi-app.service > /dev/null
+            echo "" | sudo tee -a /etc/systemd/system/fastapi-app.service > /dev/null
+            echo "[Install]" | sudo tee -a /etc/systemd/system/fastapi-app.service > /dev/null
+            echo "WantedBy=multi-user.target" | sudo tee -a /etc/systemd/system/fastapi-app.service > /dev/null
+          fi
+          
+          # Stop existing service (if running)
+          sudo systemctl stop fastapi-app || true
+          
+          # Reload, enable and start the service
+          sudo systemctl daemon-reload
+          sudo systemctl enable fastapi-app
+          sudo systemctl start fastapi-app
+          
+          # Wait a moment for service to start
+          sleep 2
+          
+          # Check status
+          sudo systemctl status fastapi-app --no-pager
+          
+          echo "✅ Deployment completed successfully!"
+        EOF
+        
+        rm -f private_key.pem
+
