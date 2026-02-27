@@ -9,7 +9,7 @@ from .database import engine, get_db
 # Create database tables
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="FastAPIii CRUD Application", version="1.0.0")
+app = FastAPI(title="My Fast Application", version="1.0.0")
 
 
 @app.get("/")
