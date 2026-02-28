@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Management Demo</title>
+    <meta name="description" content="A premium interface connected to an EC2 backend API.">
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="background-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+    </div>
+    
+    <main class="glass-container">
+        <header>
+            <h1>Inventory <span>Manager</span></h1>
+            <p>Connected to AWS EC2 Backend via JavaScript</p>
+        </header>
+
+        <section class="add-item-section">
+            <h2>Add New Item</h2>
+            <form id="add-item-form">
+                <div class="input-group">
+                    <input type="text" id="item-name" placeholder="Item Name (e.g., Nike Air Max)" required>
+                </div>
+                <div class="input-group">
+                    <input type="number" id="item-price" placeholder="Price ($)" required step="0.01">
+                </div>
+                <button type="submit" class="btn-primary">Create Item</button>
+            </form>
+        </section>
+
+        <section class="inventory-section">
+            <div class="inventory-header">
+                <h2>Current Inventory</h2>
+                <button id="refresh-btn" class="btn-icon" title="Refresh Database">↻</button>
+            </div>
+            
+            <div class="table-container">
+                <table id="inventory-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Price</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventory-body">
+                        <!-- Items will be injected here dynamically by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="loading" class="loading">Loading data from EC2 API...</div>
+            <div id="error-message" class="error hidden"></div>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
